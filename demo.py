@@ -14,7 +14,8 @@ def fofa_search(query):
     params = {
         'email': email,
         'key': key,
-        'qbase64': base64.b64encode(query.encode()).decode()
+        'qbase64': base64.b64encode(query.encode()).decode(),
+        'fields': 'host,title,header,product',
     }
     response = requests.get(base_url, params=params)
     
@@ -23,6 +24,22 @@ def fofa_search(query):
     else:
         return {"error": f"Request failed with status code {response.status_code}"}
     
+def fofa_stats(query):
+    email = os.getenv('FOFA_EMAIL')
+    key = os.getenv('FOFA_KEY')
+    base_url = "https://fofa.info/api/v1/search/stats"
+    params = {
+        'email': email,
+        'key': key,
+        'qbase64': base64.b64encode(query.encode()).decode()
+    }
+    response = requests.get(base_url, params=params)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": f"Request failed with status code {response.status_code}"}
+
 # 示例查询
 if __name__ == "__main__":
     query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
