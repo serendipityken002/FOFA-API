@@ -1,0 +1,30 @@
+import requests
+import base64
+import os
+from dotenv import load_dotenv
+import json
+
+load_dotenv()  # 加载.env文件
+
+# 构建Fofa API请求
+def fofa_search(query):
+    email = os.getenv('FOFA_EMAIL')
+    key = os.getenv('FOFA_KEY')
+    base_url = "https://fofa.info/api/v1/search/all"
+    params = {
+        'email': email,
+        'key': key,
+        'qbase64': base64.b64encode(query.encode()).decode()
+    }
+    response = requests.get(base_url, params=params)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": f"Request failed with status code {response.status_code}"}
+    
+# 示例查询
+if __name__ == "__main__":
+    query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
+    result = fofa_search(query)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
