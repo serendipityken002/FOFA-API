@@ -61,7 +61,8 @@ def fofa_host(host):
 
 # 示例查询
 if __name__ == "__main__":
-    query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
+    # query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
+    query = 'app="Canon-网络摄像头"'
     # result = fofa_search(query)
     result = fofa_stats(query)
     # result = fofa_host('122.114.56.64')
