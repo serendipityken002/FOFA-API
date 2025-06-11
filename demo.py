@@ -33,7 +33,7 @@ def fofa_stats(query):
         'email': email,
         'key': key,
         'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': 'fid,icp,server,title'
+        'fields': 'product1,product5,category1,category5',
     }
     response = requests.get(base_url, params=params)
     
