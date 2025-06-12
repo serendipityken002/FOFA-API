@@ -59,11 +59,55 @@ def fofa_host(host):
     else:
         return {"error": f"Request failed with status code {response.status_code}"}
 
+# 构建流式查询
+def fofa_stream(query):
+    email = os.getenv('FOFA_EMAIL')
+    key = os.getenv('FOFA_KEY')
+    base_url = "https://fofa.info/api/v1/stream/search/all"
+    params = {
+        'email': email,
+        'key': key,
+        'qbase64': base64.b64encode(query.encode()).decode(),
+        'fields': 'host,title,header,product',
+        'size': 100,  # 设置每次请求的结果数量
+    }
+    response = requests.get(base_url, params=params, stream=True)
+    
+    if response.status_code == 200:
+        return response.iter_lines()
+    else:
+        return {"error": f"Request failed with status code {response.status_code}"}
+
+# 查询规则标签
+def fofa_tags():
+    email = os.getenv('FOFA_EMAIL')
+    key = os.getenv('FOFA_KEY')
+    base_url = "https://fofa.info/api/v1/rule_tags/query"
+    params = {
+        'email': email,
+        'key': key,
+        'value': '网络摄像头',
+        'field': 'title',
+    }
+    response = requests.get(base_url, params=params)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": f"Request failed with status code {response.status_code}"}
+
 # 示例查询
 if __name__ == "__main__":
     # query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
     query = 'app="Canon-网络摄像头"'
     # result = fofa_search(query)
-    result = fofa_stats(query)
+    # result = fofa_stats(query)
     # result = fofa_host('122.114.56.64')
+
+    # result = fofa_stream(query)
+    # for line in result:
+    #     if line:  # 确保行不为空
+    #         print(line.decode('utf-8'))  # 解码并打印每一行
+
+    result = fofa_tags()
     print(json.dumps(result, ensure_ascii=False, indent=2))
