@@ -100,7 +100,7 @@ def fofa_tags():
 if __name__ == "__main__":
     # query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
     query = 'app="Canon-网络摄像头"'
-    # result = fofa_search(query)
+    result = fofa_search(query)
     # result = fofa_stats(query)
     # result = fofa_host('122.114.56.64')
 
@@ -109,5 +109,5 @@ if __name__ == "__main__":
     #     if line:  # 确保行不为空
     #         print(line.decode('utf-8'))  # 解码并打印每一行
 
-    result = fofa_tags()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    # result = fofa_tags()
+    # print(json.dumps(result, ensure_ascii=False, indent=2))

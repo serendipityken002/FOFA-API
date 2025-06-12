@@ -2,3 +2,6 @@ requests
 python-dotenv
 langchain
 langchain-openai
+pandas
+scikit-learn
+matplotlib
