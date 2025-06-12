@@ -3,7 +3,6 @@ import base64
 import os
 from dotenv import load_dotenv
 import time
-from typing import Tuple, Dict, Optional, Union, Any
 
 load_dotenv()  # 加载.env文件
 
@@ -57,7 +56,7 @@ def get_top_product(json_data):
         return product_name, product_count
     return None, None
     
-def get_size(json_data: Dict[str, Any]) -> int:
+def get_size(json_data) -> int:
     """
     获取查询结果的总数量
     
@@ -70,7 +69,7 @@ def get_size(json_data: Dict[str, Any]) -> int:
     return json_data.get('size', 0)
 
 def check_duplicate(json_data, direction: str = "forward", 
-                   forward_threshold: float = 0.8, reverse_threshold: float = 0.5) -> Dict[str, Any]:
+                   forward_threshold: float = 0.8, reverse_threshold: float = 0.5):
     """
     综合查重函数，支持正向和反向查重
     
@@ -132,7 +131,7 @@ def check_duplicate(json_data, direction: str = "forward",
     
     return result
 
-def is_duplicate(query: str) -> Dict[str, Any]:
+def is_duplicate(query: str):
     """
     完整的查重流程，综合正向和反向查重的结果
     
