@@ -176,7 +176,7 @@ def is_duplicate(query: str):
 # 示例查询
 if __name__ == "__main__":
     query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
-    query = 'banner="aurora" && (banner="AD" || banner="ADC")'
+    # query = 'banner="aurora" && (banner="AD" || banner="ADC")'
     
     # # 单独测试正向和反向查重
     # json_data = fofa_stats(query)

@@ -33,7 +33,7 @@ def create_duplicate_check_chain(llm, verbose=False):
     - **目的**: 检查老规则资产被新规则覆盖的比例
     - **判断逻辑**:
     - ratio < 0.5: 新规则是老规则的细分 → "不重复"
-    - ratio ≥ 0.5: 规则高度重叠 → "重复"
+    - ratio ≥ 0.5: 新规则与老规则高度重叠 → "重复"
 
     ## 输入数据
     ```json
@@ -41,9 +41,10 @@ def create_duplicate_check_chain(llm, verbose=False):
     ```
 
     ## 分析步骤
-    1. 提取forward_check和reverse_check的ratio值
-    2. 按照既定逻辑进行判断
-    3. 生成详细的分析理由
+    1. 从输入数据中检查，是否存在error字段，如果存在，直接返回error字段下的错误信息。
+    2. 提取forward_check和reverse_check的ratio值
+    3. 按照既定逻辑进行判断，只有在正向查重ratio ≥ 0.7的情况下才进行反向查重分析
+    4. 生成详细的分析理由
 
     ## 输出要求
     严格返回以下JSON格式，不要添加任何额外文字：
@@ -52,7 +53,8 @@ def create_duplicate_check_chain(llm, verbose=False):
     {{
         "is_duplicate": true/false,
         "top_product": "现有规则的名称",
-        "reason": "基于正向查重ratio和反向查重ratio的详细分析。具体判断逻辑：..."
+        "ratio": "给出正向查重ratio和反向查重ratio的值（如果有反向查重）",
+        "reason": "基于正向查重ratio和反向查重ratio的详细分析。具体判断逻辑，中文回答"
     }}
     ```
 
@@ -73,17 +75,25 @@ def duplicate_check_tool(query: str) -> str:
     规则重复检查工具函数
     """
     try:
+        # 检查并修复查询字符串
+        if query.count('"') % 2 != 0:  # 如果引号数量不是偶数
+            # 检查是否缺少最后的引号
+            last_quote_pos = query.rfind('"')
+            if last_quote_pos > 0 and query[last_quote_pos-1] != '\\':
+                query = query + '"'
+        
         # 获取重复检查结果
+        print(f"正在检查查询: {query}")
         result = is_duplicate(query)
         
         # 创建LLM实例
         llm = ChatOpenAI(
             base_url="https://api.chatanywhere.tech/v1",
             model="gpt-3.5-turbo",
-            temperature=0.1,  # 降低温度以提高一致性
+            temperature=0.5,
             max_tokens=500
         )
-        
+    
         # 创建分析链
         duplicate_chain = create_duplicate_check_chain(llm, verbose=True)
         
@@ -91,14 +101,15 @@ def duplicate_check_tool(query: str) -> str:
         analysis_result = duplicate_chain.invoke({
             "result": json.dumps(result, ensure_ascii=False, indent=2)
         })
-        
-        # 格式化输出
-        if isinstance(analysis_result, dict):
-            formatted_result = json.dumps(analysis_result, ensure_ascii=False, indent=2)
-        else:
-            formatted_result = str(analysis_result)
             
-        return formatted_result
+        # 如果返回的是对象，提取content属性
+        if hasattr(analysis_result, 'content'):
+            # 去除markdown代码块标记
+            content = analysis_result.content
+            content = content.replace('```json', '').replace('```', '').strip()
+            return content
+        else:
+            return analysis_result
         
     except Exception as e:
         error_msg = f"重复检查工具执行失败: {str(e)}"
@@ -124,8 +135,13 @@ class FOFAAnalysisAgent:
             Tool(
                 name="duplicate_check",
                 func=duplicate_check_tool,
-                description="""检查FOFA规则是否与已有规则重复。
-                输入: FOFA查询语句 (例如: 'banner="aurora" && (banner="AD" || banner="ADC")')
+                description="""
+                检查FOFA规则是否与已有规则重复。
+                输入: FOFA查询语句 例如: 
+                - body="js/validator.js" && body="js/mootools.js"
+                - title="beijing"
+                - banner="AD" || banner="ADC"
+                输出: 简体中文回答，JSON格式的分析结果，包含是否重复、top产品名称和分析理由。
                 """
             )
         ]
@@ -148,33 +164,7 @@ class FOFAAnalysisAgent:
         2. 根据需求选择并调用适当的工具
         3. 解读工具返回的JSON数据
         4. 提供专业、清晰的分析报告
-
-        ## 重要提示 
-        当使用duplicate_check工具时，你必须严格遵循以下要求:
-        1. 必须使用中文回答
-        2. 必须完整展示以下所有信息，一个都不能省略:
-        - 规则是否重复（is_duplicate的值）
-        - 匹配的产品名称（top_product的完整值）
-        - 详细的重复原因（reason的完整内容）
-        - 正向查重比例（forward_ratio的值）
-        - 反向查重比例（reverse_ratio的值）
-
-        ## 输出格式参考
-        请按照以下格式回答:
-
-        ### 规则查重结果
-        - **重复状态**: [是/否重复]
-        - **匹配产品**: [完整产品名称]
-
-        ### 查重数据
-        - **正向查重比例**: [数值] (新规则被老规则覆盖比例)
-        - **反向查重比例**: [数值] (老规则被新规则覆盖比例)
-
-        ### 重复性分析
-        [这里必须包含工具返回的完整reason内容]
-
-        ### 建议
-        [根据分析结果提供的优化建议]"""
+        """
 
         # 初始化Agent
         self.agent = self._create_agent()
@@ -218,7 +208,8 @@ def main():
         user_input = input("\n> ").strip()
         if user_input:
             result = fofa_agent.analyze(user_input)
-            print(f"\n{result}")
+            output = result['output'] if isinstance(result, dict) else result
+            print(f"\n{output}")
 
 if __name__ == "__main__":
     main()
