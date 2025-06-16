@@ -15,7 +15,7 @@ def fofa_search(query):
         'email': email,
         'key': key,
         'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': 'host,title,header,product',
+        'fields': 'host,title,header,banner',
     }
     response = requests.get(base_url, params=params)
     
