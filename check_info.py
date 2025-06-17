@@ -114,7 +114,51 @@ def check_webside_manufacturer(llm, content, webside, manufacturer):
         print(error_msg)
         return error_msg
 
-def main(query, webside, manufacturer):
+def check_classification(llm, content, classification1, classification2):
+    """
+    基于参考信息，判断分类是否准确
+    """
+    # 可选的分类结果
+    classification = {}
+    f = open('classification.json', 'r', encoding='utf-8')
+    try:
+        classification = json.load(f)
+        print("加载所有分类信息成功")
+    except json.JSONDecodeError as e:
+        print(f"加载所有分类信息失败: {str(e)}")
+
+    template = """
+    你是一个优秀的网络信息分类专家，你需要根据以下内容判断分类是否准确，先判断大类再判断小类。
+
+    参考信息: {content}
+
+    所有分类信息：{classification}
+    请判断以下两个分类是否准确：
+
+    大类: {classification1}
+    小类: {classification2}
+
+    请结合你的专业知识和行业常识，结合给定的所有分类信息，判断这两个分类是否准确，并给出理由。
+    - 首先思考参考信息的内容和特点，结合所有分类信息，思考最可能的一级分类名称，判断是否属于大类的内容
+    - 然后类似的，结合所有分类信息，进一步判断是否属于小类的内容
+
+    """
+
+    prompt = PromptTemplate(
+        input_variables=["content", "classification", "classification1", "classification2"],
+        template=template
+    )
+
+    try:
+        chain = LLMChain(llm=llm, prompt=prompt)
+        return chain.run(content=content, classification=classification, classification1=classification1, classification2=classification2)
+    except Exception as e:
+        error_msg = f"检查分类信息失败: {str(e)}"
+        print(error_msg)
+        return error_msg
+
+
+def main(query, webside, manufacturer, classification1, classification2):
     load_environment()
     
     # 初始化LLM
@@ -132,11 +176,20 @@ def main(query, webside, manufacturer):
         webside=webside, 
         manufacturer=manufacturer
     )
-    return res
+    print("厂商信息检查结果:", res)
+    res2 = check_classification(
+        llm, 
+        content=content, 
+        classification1=classification1, 
+        classification2=classification2
+    )
+    return res2
 
 if __name__ == "__main__":
-    query = 'banner="Wisnetworks" && banner="WIS-Q300"'
-    webside = 'https://teltonika-networks.com/products/routers/rutm50'
-    manufacturer = 'Teltonika Networks UAB.'
-    res = main(query, webside, manufacturer)
+    query = 'banner="AXIS P1448-LE"'
+    webside = 'https://www.axis.com/products/axis-p1448-le/support'
+    manufacturer = 'Axis Communications AB.'
+    classification1 = '物联网设备'
+    classification2 = '视频监控'
+    res = main(query, webside, manufacturer, classification1, classification2)
     print("最终结果:", res)
