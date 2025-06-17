@@ -15,7 +15,7 @@ def fofa_search(query):
         'email': email,
         'key': key,
         'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': 'host,title,header,banner',
+        'fields': 'host,title,protocol,server,cert,banner',
     }
     response = requests.get(base_url, params=params)
     
@@ -99,7 +99,8 @@ def fofa_tags():
 # 示例查询
 if __name__ == "__main__":
     # query = 'body="js/validator.js" && body="js/mootools.js" && title="IDC/ISP"'
-    query = 'app="Canon-网络摄像头"'
+    query = 'banner="KX IV-101"'
+    # query = 'body="Aterm WG1200HS3" && title="NEC クイック設定Web | Aterm"'
     result = fofa_search(query)
     # result = fofa_stats(query)
     # result = fofa_host('122.114.56.64')
@@ -110,4 +111,4 @@ if __name__ == "__main__":
     #         print(line.decode('utf-8'))  # 解码并打印每一行
 
     # result = fofa_tags()
-    # print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
