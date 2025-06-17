@@ -5,3 +5,6 @@ langchain-openai
 pandas
 scikit-learn
 matplotlib
+google-search-results
+langchain_community
+langchain.tools
