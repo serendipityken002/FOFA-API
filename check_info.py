@@ -7,6 +7,8 @@ import requests
 import base64
 import json
 
+from API import fofa_search
+
 def load_environment():
     """加载环境变量"""
     load_dotenv()
@@ -18,26 +20,6 @@ def load_environment():
         print("警告: SERPAPI_API_KEY 未设置")
     if not os.environ["OPENAI_API_KEY"]:
         print("警告: OPENAI_API_KEY 未设置")
-
-def fofa_search(query, fields='banner'):
-    """
-    使用FOFA API进行搜索内容
-    """
-    email = os.getenv('FOFA_EMAIL')
-    key = os.getenv('FOFA_KEY')
-    base_url = "https://fofa.info/api/v1/search/all"
-    params = {
-        'email': email,
-        'key': key,
-        'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': fields,
-    }
-    response = requests.get(base_url, params=params)
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return {"error": f"Request failed with status code {response.status_code}"}
   
 def get_banner_or_body(query):
     """
@@ -45,7 +27,7 @@ def get_banner_or_body(query):
     """
     banner_query = '(' + query + ') && type="service"'
     body_query = '(' + query + ') && type!="service"'
-    banner_result = fofa_search(banner_query)
+    banner_result = fofa_search(banner_query, fields='banner')
     body_result = fofa_search(body_query, fields='body')
     if banner_result.get('error') and body_result.get('error'):
         print(f"FOFA查询失败: {banner_result.get('error', '')} {body_result.get('error', '')}")
@@ -196,7 +178,7 @@ def summarize_content(llm, content):
 
     审核信息：{content}
 
-    请将审核信息格式化为以下json格式：
+    请将审核信息格式化为以下json格式，确保输出是有效的JSON：
     {{
         "website_check": {{
             "result": "True/False",
@@ -211,6 +193,12 @@ def summarize_content(llm, content):
             "reason": "判断理由"
         }}
     }}
+
+    请注意：
+    1. 仅输出JSON格式，不要添加任何其他文本、解释或代码块标记
+    2. 使用双引号而不是单引号
+    3. result值必须是True或False（不带引号的布尔值）
+    4. 确保JSON格式正确，没有多余的逗号或缺少的括号
     """
 
     prompt = PromptTemplate(
@@ -221,20 +209,60 @@ def summarize_content(llm, content):
     try:
         chain = LLMChain(llm=llm, prompt=prompt)
         if not content:
-            return {"error": "内容为空，无法进行总结"}
+            return {"error": "内容为空，无法进行总结", 
+                   "website_check": {"result": False, "reason": "内容为空"},
+                   "manufacturer_check": {"result": False, "reason": "内容为空"},
+                   "classification_check": {"result": False, "reason": "内容为空"}}
+        
         result = chain.run(content=content)
+        
         if not result:
-            return {"error": "总结内容为空，无法进行格式化输出"}
+            return {"error": "总结内容为空，无法进行格式化输出",
+                   "website_check": {"result": False, "reason": "无法获取结果"},
+                   "manufacturer_check": {"result": False, "reason": "无法获取结果"},
+                   "classification_check": {"result": False, "reason": "无法获取结果"}}
+        
         # 尝试解析为JSON格式
         try:
-            return json.loads(result)
+            # 清理可能导致JSON解析错误的字符
+            result = result.strip()
+            # 如果结果被包裹在```json和```中，去掉这些标记
+            if result.startswith('```json'):
+                result = result.replace('```json', '', 1)
+            if result.endswith('```'):
+                result = result[:-3]
+            result = result.strip()
+            
+            json_result = json.loads(result)
+            
+            # 确保所有必要的字段都存在
+            if "website_check" not in json_result:
+                json_result["website_check"] = {"result": False, "reason": "缺少网站检查结果"}
+            if "manufacturer_check" not in json_result:
+                json_result["manufacturer_check"] = {"result": False, "reason": "缺少厂商检查结果"}
+            if "classification_check" not in json_result:
+                json_result["classification_check"] = {"result": False, "reason": "缺少分类检查结果"}
+                
+            return json_result
         except json.JSONDecodeError as e:
             print(f"格式化输出失败: {str(e)}")
-            return {"error": "格式化输出失败", "message": str(e)}
+            print(f"原始输出: {result}")
+            # 返回默认结构而不是错误
+            return {
+                "error": f"格式化输出失败: {str(e)}",
+                "website_check": {"result": False, "reason": "JSON解析失败"},
+                "manufacturer_check": {"result": False, "reason": "JSON解析失败"},
+                "classification_check": {"result": False, "reason": "JSON解析失败"}
+            }
     except Exception as e:
         error_msg = f"总结内容失败: {str(e)}"
         print(error_msg)
-        return {"error": "总结内容失败", "message": str(e)}
+        return {
+            "error": f"总结内容失败: {str(e)}",
+            "website_check": {"result": False, "reason": "处理失败"},
+            "manufacturer_check": {"result": False, "reason": "处理失败"},
+            "classification_check": {"result": False, "reason": "处理失败"}
+        }
 
 # def simplify_content(content, llm=None):
 #     """

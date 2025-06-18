@@ -7,7 +7,7 @@ import json
 load_dotenv()  # 加载.env文件
 
 # 构建Fofa API请求
-def fofa_search(query):
+def fofa_search(query, fields='banner'):
     email = os.getenv('FOFA_EMAIL')
     key = os.getenv('FOFA_KEY')
     base_url = "https://fofa.info/api/v1/search/all"
@@ -15,7 +15,7 @@ def fofa_search(query):
         'email': email,
         'key': key,
         'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': 'host,title,protocol,server,cert,banner',
+        'fields': fields,
     }
     response = requests.get(base_url, params=params)
     
@@ -25,7 +25,7 @@ def fofa_search(query):
         return {"error": f"Request failed with status code {response.status_code}"}
     
 # 构建Fofa API统计请求
-def fofa_stats(query):
+def fofa_stats(query: str, fields: str = 'product1,product5,category1,category5'):
     email = os.getenv('FOFA_EMAIL')
     key = os.getenv('FOFA_KEY')
     base_url = "https://fofa.info/api/v1/search/stats"

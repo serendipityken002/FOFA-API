@@ -65,9 +65,19 @@ def main():
     manufacturer = 'TP-Link Systems Inc.'
     classification1 = '网络交换设备'
     classification2 = '路由器'
+
     result = duplicate_check(query)
     result = json.loads(result)
-    print(result)
+    if not result['error']:
+        info_result = info_check(query, webside, manufacturer, classification1, classification2)
+        # 确保duplicate_check键存在
+        if 'duplicate_check' not in info_result:
+            info_result['duplicate_check'] = {}
+        info_result['duplicate_check']['result'] = result['is_duplicate']
+        info_result['duplicate_check']['reason'] = result['reason']
+        print(info_result)
+    else:
+        print(f"Error: {result['message']}")
 
 if __name__ == "__main__":
     main()

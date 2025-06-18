@@ -4,39 +4,41 @@ import os
 from dotenv import load_dotenv
 import time
 
+from API import fofa_stats
+
 load_dotenv()  # 加载.env文件
 
-def fofa_stats(query: str, fields: str = 'product1,product5,category1,category5'):
-    """
-    构建Fofa API统计请求
+# def fofa_stats(query: str, fields: str = 'product1,product5,category1,category5'):
+#     """
+#     构建Fofa API统计请求
     
-    Args:
-        query: FOFA查询语句
-        fields: 需要返回的字段
+#     Args:
+#         query: FOFA查询语句
+#         fields: 需要返回的字段
         
-    Returns:
-        API返回的JSON数据
-    """
-    email = os.getenv('FOFA_EMAIL')
-    key = os.getenv('FOFA_KEY')
+#     Returns:
+#         API返回的JSON数据
+#     """
+#     email = os.getenv('FOFA_EMAIL')
+#     key = os.getenv('FOFA_KEY')
     
-    if not email or not key:
-        return {"error": "FOFA credentials not found in environment variables"}
+#     if not email or not key:
+#         return {"error": "FOFA credentials not found in environment variables"}
     
-    base_url = "https://fofa.info/api/v1/search/stats"
-    params = {
-        'email': email,
-        'key': key,
-        'qbase64': base64.b64encode(query.encode()).decode(),
-        'fields': fields,
-    }
+#     base_url = "https://fofa.info/api/v1/search/stats"
+#     params = {
+#         'email': email,
+#         'key': key,
+#         'qbase64': base64.b64encode(query.encode()).decode(),
+#         'fields': fields,
+#     }
     
-    try:
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
+#     try:
+#         response = requests.get(base_url, params=params)
+#         response.raise_for_status()
+#         return response.json()
+#     except requests.exceptions.RequestException as e:
+#         return {"error": f"Request failed: {str(e)}"}
     
 def get_top_product(json_data):
     """
@@ -161,7 +163,7 @@ def is_duplicate(query: str):
     result['forward_check'] = forward_result
     
     # 添加API请求间隔
-    time.sleep(5) # 统计聚合每5秒只允许查询一次
+    time.sleep(3) # 统计聚合每5秒只允许查询一次
     
     # 反向查重
     reverse_result = check_duplicate(json_data, "reverse")
