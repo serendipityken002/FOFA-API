@@ -7,6 +7,7 @@ import json
 from openai import OpenAI
 
 from duplicate_check_demo import is_duplicate
+from check_info import check
 
 def duplicate_check(rule):
     """
@@ -51,9 +52,20 @@ def duplicate_check(rule):
         'product': product_name
     })
 
+def info_check(rule, webside, manufacturer, classification1, classification2):
+    """
+    根据规则内容，判断厂商、分类、官网网址是否准确
+    """
+    res = check(rule, webside, manufacturer, classification1, classification2)
+    return res
+
 def main():
-    rule = 'banner="aurora" && (banner="AD" || banner="ADC")'
-    result = duplicate_check(rule)
+    query = r'body="var modelName=\"EX1110\"" || cert="EX1110"'
+    webside = 'https://service-provider.tp-link.com/wifi-router/ex1110/'
+    manufacturer = 'TP-Link Systems Inc.'
+    classification1 = '网络交换设备'
+    classification2 = '路由器'
+    result = duplicate_check(query)
     result = json.loads(result)
     print(result)
 

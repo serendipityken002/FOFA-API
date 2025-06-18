@@ -38,22 +38,41 @@ def fofa_search(query, fields='banner'):
         return response.json()
     else:
         return {"error": f"Request failed with status code {response.status_code}"}
-    
-def get_banner_or_title(query):
+  
+def get_banner_or_body(query):
     """
     根据规则查询FOFA，获取banner或title信息
     """
     banner_query = '(' + query + ') && type="service"'
-    result = fofa_search(banner_query)
-    if result.get('error'):
-        print(f"FOFA查询失败: {result['errmsg']}")
+    body_query = '(' + query + ') && type!="service"'
+    banner_result = fofa_search(banner_query)
+    body_result = fofa_search(body_query, fields='body')
+    if banner_result.get('error') and body_result.get('error'):
+        print(f"FOFA查询失败: {banner_result.get('error', '')} {body_result.get('error', '')}")
         return []
+    
     # 若result内容不为空
-    if result['size'] > 5:
-        content = result['results'][:5]
-    else:
-        result = fofa_search(query, fields='title')
-        content = result['results'][:5]
+    body_result = body_result.get('results', [])[:3]
+    banner_result = banner_result.get('results', [])[:5]
+
+    # 简化body的内容
+    # body_result = simplify_content(body_result)
+
+
+    # 合并banner和body内容
+    content = []
+    if banner_result:
+        content.append("查询到的Banner信息:")
+        for item in banner_result:
+            content.append(f"Banner: {item}")
+    if body_result:
+        content.append("查询到的Body信息:")
+        for item in body_result:
+            if len(item) > 20000:
+                content.append(f"Body: {item[:10000]}...{item[-10000:]}")
+            else:
+                content.append(f"Body: {item}")
+
     content.append(f"查询规则: {query}")
     return content
 
@@ -68,11 +87,14 @@ def crawl_website(url):
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        if len(response.text) > 80000:
-            print(f"警告: 爬取的内容过长 ({len(response.text)} 字符)，需要截取前后各30000字符，中间部分省略")
+
+        # 调用简化内容函数
+        # response = simplify_content(response.text)
+        
         # 截断内容以避免过长
         if len(response.text) > 80000:
-            return response.text[:30000] + response.text[-30000:]  # 截取前后各30000字符，中间部分省略
+            print(f"警告: 爬取的内容过长 ({len(response.text)} 字符)，需要截取前后各30000字符，中间部分省略")
+            return response.text[:25000] + response.text[-25000:]  # 截取前后各30000字符，中间部分省略
         else:
             return response.text
     except requests.RequestException as e:
@@ -94,8 +116,13 @@ def check_webside_manufacturer(llm, content, webside, manufacturer):
     
     请结合你的网站数据和行业常识，并根据参考信息，分别判断厂商名和网站内容是否正确，返回判断结果和理由。
     - 首先判断网站内容是否与参考信息一致：第一步思考参考信息的厂商、产品等；第二步思考网站内容是否与参考信息对应；不考虑版本、语言等差异，若一致则返回官方网站正确。
-    - 然后判断厂商名，是否与参考信息一致：第一步思考参考信息的厂商；第二步判断参考信息的厂商是否与给定的厂商一致。不考虑版本、语言等差异，若厂商名与参考信息一致，则返回厂商名正确。
-    - 注意：厂商名和网站内容之间的关系不用考虑，只需要分别判断厂商名和网站内容是否正确即可。
+    - 然后判断厂商名，是否与参考信息一致：第一步思考参考信息中的厂商相关线索（如域名、产品名称等）；第二步判断给定的厂商名是否与这些线索匹配。即使参考信息中没有直接出现完整的厂商名称，只要有足够的间接证据（如域名、产品特征等）表明厂商一致，也应判定为正确。
+    
+    注意：
+    1. 厂商名和网站内容之间的关系不用考虑，只需要分别判断厂商名和网站内容是否正确即可。
+    2. 对于厂商名的判断，不要过于严格要求参考信息中必须出现完整的厂商名称。如果参考信息中的域名、产品型号等间接证据指向该厂商，应判定为正确。
+    3. 若参考信息为空，厂商名和网站名都返回不确定
+    4. 若网站内容为空，则网站名返回不确定，厂商名仍然判断是否正确
 
     """
     
@@ -142,6 +169,9 @@ def check_classification(llm, content, classification1, classification2):
     - 首先思考参考信息的内容和特点，结合所有分类信息，思考最可能的一级分类名称，判断是否属于大类的内容
     - 然后类似的，结合所有分类信息，进一步判断是否属于小类的内容
 
+    注意：小类必须在对应的大类下面，所以你主要关注小类划分与参考信息是否一致。
+    若参考信息为空，返回不确定
+
     """
 
     prompt = PromptTemplate(
@@ -157,8 +187,142 @@ def check_classification(llm, content, classification1, classification2):
         print(error_msg)
         return error_msg
 
+def summarize_content(llm, content):
+    """
+    根据大模型分析的信息，格式化输出为json格式
+    """
+    template = """
+    你是一个优秀的FOFA规则信息审核师，我会提供给你某条规则的厂商、官网地址、分类信息的审核过程，你需要按照给定json格式进行输出。
 
-def main(query, webside, manufacturer, classification1, classification2):
+    审核信息：{content}
+
+    请将审核信息格式化为以下json格式：
+    {{
+        "website_check": {{
+            "result": "True/False",
+            "reason": "判断理由"
+        }},
+        "manufacturer_check": {{
+            "result": "True/False",
+            "reason": "判断理由"
+        }},
+        "classification_check": {{
+            "result": "True/False",
+            "reason": "判断理由"
+        }}
+    }}
+    """
+
+    prompt = PromptTemplate(
+        input_variables=["content"],
+        template=template
+    )
+
+    try:
+        chain = LLMChain(llm=llm, prompt=prompt)
+        if not content:
+            return {"error": "内容为空，无法进行总结"}
+        result = chain.run(content=content)
+        if not result:
+            return {"error": "总结内容为空，无法进行格式化输出"}
+        # 尝试解析为JSON格式
+        try:
+            return json.loads(result)
+        except json.JSONDecodeError as e:
+            print(f"格式化输出失败: {str(e)}")
+            return {"error": "格式化输出失败", "message": str(e)}
+    except Exception as e:
+        error_msg = f"总结内容失败: {str(e)}"
+        print(error_msg)
+        return {"error": "总结内容失败", "message": str(e)}
+
+# def simplify_content(content, llm=None):
+#     """
+#     AI检索html内容，提取关键信息
+#     将长内容分段处理，保留与厂商、官网地址、分类信息相关的内容
+#     """
+#     if llm is None:
+#         llm = ChatOpenAI(
+#             model="qwen",
+#             openai_api_base="http://211.91.254.226:2440/v1",
+#             verbose=True,
+#         )
+#     if not content:
+#         return ""
+    
+#     # 分段处理，每段最大30000字符
+#     chunks = []
+#     max_chunk_size = 30000
+    
+#     if len(content) <= max_chunk_size:
+#         chunks = [content]
+#     else:
+#         # 分段处理长文本
+#         for i in range(0, len(content), max_chunk_size):
+#             chunks.append(content[i:i+max_chunk_size])
+    
+#     template = """
+#     你是一个专业的内容提取专家。请从以下内容中提取与厂商信息、官网地址、产品分类相关的关键信息。
+    
+#     内容: {chunk}
+    
+#     请只提取与以下内容相关的信息：
+#     1. 厂商名称、公司信息
+#     2. 官方网站信息、域名、链接
+#     3. 产品或服务分类信息
+#     4. 产品名称、型号、功能描述
+    
+#     仅保留原文中的相关信息，删去无关内容，不要添加自己的解释或推断。
+#     如果内容中没有相关信息，请返回"无相关信息"。
+#     """
+    
+#     prompt = PromptTemplate(
+#         input_variables=["chunk"],
+#         template=template
+#     )
+    
+#     extracted_contents = []
+    
+#     try:
+#         for chunk in chunks:
+#             chain = LLMChain(llm=llm, prompt=prompt)
+#             result = chain.run(chunk=chunk)
+#             if result and result != "无相关信息":
+#                 extracted_contents.append(result)
+        
+#         # 合并所有提取的内容
+#         final_content = "\n\n".join(extracted_contents)
+        
+#         # 如果提取内容过长，进行二次精简
+#         while len(final_content) > max_chunk_size:
+#             final_template = """
+#             你是一个专业的内容精简专家。请对以下已提取的内容进行进一步精简，确保保留所有与厂商信息、官网地址、产品分类相关的关键信息。
+            
+#             内容: {content}
+            
+#             请确保精简后的内容保留所有关键信息，删去重复内容，不要添加自己的解释或推断。
+#             """
+            
+#             final_prompt = PromptTemplate(
+#                 input_variables=["content"],
+#                 template=final_template
+#             )
+            
+#             final_chain = LLMChain(llm=llm, prompt=final_prompt)
+#             final_content = final_chain.run(content=final_content)
+        
+#         # 返回内容加上原文本的首尾部分
+#         final_content = content[:15000] + "\n\n" + final_content + "\n\n" + content[-15000:]
+
+#         return final_content
+#     except Exception as e:
+#         error_msg = f"提取内容失败: {str(e)}"
+#         print(error_msg)
+#         return error_msg
+
+
+
+def check(query, webside, manufacturer, classification1, classification2):
     load_environment()
     
     # 初始化LLM
@@ -168,7 +332,7 @@ def main(query, webside, manufacturer, classification1, classification2):
         verbose=True,
     )
 
-    content = get_banner_or_title(query)
+    content = get_banner_or_body(query)
     print("查询结果:", content)
     res = check_webside_manufacturer(
         llm, 
@@ -183,13 +347,19 @@ def main(query, webside, manufacturer, classification1, classification2):
         classification1=classification1, 
         classification2=classification2
     )
-    return res2
+    print("分类信息检查结果:", res2)
+    
+    # 将结果合并并格式化为JSON
+    content = res + "\n" + res2
+    res_json = summarize_content(llm, content)
+
+    return res_json
 
 if __name__ == "__main__":
-    query = 'banner="AXIS P1448-LE"'
-    webside = 'https://www.axis.com/products/axis-p1448-le/support'
-    manufacturer = 'Axis Communications AB.'
-    classification1 = '物联网设备'
-    classification2 = '视频监控'
-    res = main(query, webside, manufacturer, classification1, classification2)
+    query = r'body="var modelName=\"EX1110\"" || cert="EX1110"'
+    webside = 'https://service-provider.tp-link.com/wifi-router/ex1110/'
+    manufacturer = 'TP-Link Systems Inc.'
+    classification1 = '网络交换设备'
+    classification2 = '路由器'
+    res = check(query, webside, manufacturer, classification1, classification2)
     print("最终结果:", res)
