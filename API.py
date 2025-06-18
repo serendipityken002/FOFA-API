@@ -7,7 +7,7 @@ import json
 load_dotenv()  # 加载.env文件
 
 # 构建Fofa API请求
-def fofa_search(query, fields='banner'):
+def fofa_search(query, fields='banner', page=1, size=100):
     email = os.getenv('FOFA_EMAIL')
     key = os.getenv('FOFA_KEY')
     base_url = "https://fofa.info/api/v1/search/all"
@@ -16,6 +16,8 @@ def fofa_search(query, fields='banner'):
         'key': key,
         'qbase64': base64.b64encode(query.encode()).decode(),
         'fields': fields,
+        'page': page,
+        'size': size,
     }
     response = requests.get(base_url, params=params)
     
