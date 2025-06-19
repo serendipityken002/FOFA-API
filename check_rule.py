@@ -56,7 +56,7 @@ def simplify_content_list(llm, header_list):
     这表示响应头0、2、5相似，1和4相似，3、6、7相似。
     
     注意:
-    - 判断不需要非常严格的相似性，只要有明显的相似特征即可，最多只能分五组，最多只能分五组，最多只能分五组！！！
+    - 判断尽可能宽松，只要有明显的相似特征即可，类别控制在五组以内且必须包含所有索引
     - 如果某个响应头与其他响应头都不相似，它应该单独一组
     - 只关注响应头的内容，不考虑其他因素
     - 请只返回JSON格式的分组结果，不要添加任何额外解释
@@ -103,7 +103,7 @@ def summarize_body_content(llm, body_content_list, header_content_list):
         return []
     
     # 获取相似header的分组
-    similarity_groups = simplify_content_list(header_content_list)
+    similarity_groups = simplify_content_list(llm, header_content_list)
     
     template = """
     你是一个优秀的内容总结员, 你的任务是对以下body内容进行总结，保留主要特征信息。
@@ -140,7 +140,7 @@ def summarize_body_content(llm, body_content_list, header_content_list):
                 result = chain.run(body_content=body_content_list[first_idx])
                 results[first_idx] = result
                 processed_indices.add(first_idx)
-                print(f"完成第{first_idx+1}条body内容的总结: {result}")
+                print(f"完成第{first_idx+1}条body内容的总结")
                 
                 # 将结果复制到组内其他索引
                 for other_idx in group[1:]:
@@ -153,7 +153,7 @@ def summarize_body_content(llm, body_content_list, header_content_list):
             if i not in processed_indices:
                 result = chain.run(body_content=body_content_list[i])
                 results[i] = result
-                print(f"完成第{i+1}条body内容的总结: {result}")
+                print(f"完成第{i+1}条body内容的总结")
         
         return results
     except Exception as e:
@@ -165,10 +165,13 @@ def get_content(query):
     """
     banner_query = '(' + query + ') && type="service"'
     body_query = '(' + query + ') && type!="service"'
+    print("开始执行FOFA查询探测")
     banner_result = fofa_search(banner_query, fields='banner', page=1, size=10)
     body_result = fofa_search(body_query, fields='body', page=1, size=10)
     header_result = fofa_search(query, fields='header', page=1, size=10)
+    print("FOFA查询探测完成")
 
+    print("==============开始查询banner内容==============")
     # 针对banner查询结果进行处理
     if not banner_result['error']:
         banner_size = banner_result.get('size', 0)
@@ -183,7 +186,10 @@ def get_content(query):
             for page in page_numbers:
                 page_result = fofa_search(banner_query, fields='banner', page=page, size=10)
                 banner_content.extend([item for item in page_result.get('results', [])])
+    print(f"banner内容如下: \n {banner_content}")
+    
 
+    print("==============开始查询body和header内容==============")
     # 针对body查询结果进行处理
     if not body_result['error']:
         body_size = body_result.get('size', 0)
@@ -209,10 +215,11 @@ def get_content(query):
                         body_content.append(item[:25000] + '\n...\n' +item[-25000:])
                 for item in header_page_result.get('results', []):
                     header_content.append(item)
-
+    print("==============body内容查询完成==============")
     return banner_content, body_content, header_content
 
 def check_content(llm, banner_content, body_content):
+    print("==============开始对banner和body内容进行检测============")
     template = """
     你是一个优秀的内容检测员, 你的任务是检查以下所有内容 (banner或者body) 是否为同一类型。
     banner_content协议内容列表: {banner_content}
@@ -244,9 +251,47 @@ def check_content(llm, banner_content, body_content):
     except Exception as e:
         return {"error": str(e)}
 
+def return_res_reason(res):
+    """
+    根据检测结果的比例, 返回最终的结果和理由
+    """
+    # 处理可能包含markdown格式的JSON字符串
+    if isinstance(res, str):
+        # 清除可能的markdown格式
+        if "```" in res:
+            # 提取markdown代码块中的内容
+            import re
+            json_match = re.search(r'```(?:json)?\n(.*?)\n```', res, re.DOTALL)
+            if json_match:
+                res = json_match.group(1)
+        
+        # 尝试解析JSON
+        try:
+            res = json.loads(res)
+        except Exception as e:
+            print(f"JSON解析错误: {str(e)}")
+            print(f"原始字符串: {res}")
+            return {
+                "result": False,
+                "reason": "结果解析失败，无法判断规则正确性"
+            }
 
-if __name__ == "__main__":
-    query = r'body="/Public/plugin/artDialog/jquery.artDialog.source.js" || title="紫光档案管理系统——登录"'
+    # 提取比例数据
+    banner_ratio = res.get('banner_ratio', 0)
+    body_ratio = res.get('body_ratio', 0)
+    total_ratio = res.get('total_ratio', 0)
+    if banner_ratio < 0.7 and body_ratio < 0.7:
+        return {
+            "result": False,
+            "reason": f"规则不正确, 随机抽样60条banner, 最高的同一类型比例: {banner_ratio:.2f}, 随机抽样30条body, 最高的同一类型比例: {body_ratio:.2f}, 总比例: {total_ratio:.2f}。"
+        }
+    else:
+        return {
+            "result": True,
+            "reason": f"规则正确, 随机抽样60条banner, 最高的同一类型比例: {banner_ratio:.2f}, 随机抽样30条body, 最高的同一类型比例: {body_ratio:.2f}, 总比例: {total_ratio:.2f}。"
+        }
+
+def rule(query):
     banner_content, body_content, header_content = get_content(query)
     load_environment()
     
@@ -257,9 +302,15 @@ if __name__ == "__main__":
         verbose=True,
     )
 
-    simplify_content_list(llm, header_content)
+    print("开始对body内容进行总结")
+    simple_body_content = summarize_body_content(llm, body_content, header_content)
+    print("body内容总结完成")
+    res = check_content(llm, banner_content, simple_body_content)
+    print("内容检测完成")
+    res_reason = return_res_reason(res)
+    return res_reason
 
-    # simple_body_content = summarize_body_content(llm, body_content, header_content)
-
-    # print("Banner Content:", banner_content)
-    # print("Body Content:", simple_body_content)
+if __name__ == "__main__":
+    query = r'banner="AXIS P1344" || title="AXIS P1344"'
+    res = rule(query)
+    print("检查结果:", res)

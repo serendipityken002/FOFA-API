@@ -25,6 +25,7 @@ def get_banner_or_body(query):
     """
     根据规则查询FOFA，获取banner或title信息
     """
+    print(f"=============开始获取banner和body信息================")
     banner_query = '(' + query + ') && type="service"'
     body_query = '(' + query + ') && type!="service"'
     banner_result = fofa_search(banner_query, fields='banner')
@@ -62,6 +63,7 @@ def crawl_website(url):
     """
     爬取指定网站HTML内容
     """
+    print(f"============开始爬取网站 {url} 的html内容================")
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36 Edg/137.0.0.0'
     }
@@ -75,7 +77,7 @@ def crawl_website(url):
         
         # 截断内容以避免过长
         if len(response.text) > 80000:
-            print(f"警告: 爬取的内容过长 ({len(response.text)} 字符)，需要截取前后各30000字符，中间部分省略")
+            print(f"警告: 爬取的内容过长 ({len(response.text)} 字符)")
             return response.text[:25000] + response.text[-25000:]  # 截取前后各30000字符，中间部分省略
         else:
             return response.text
@@ -87,6 +89,7 @@ def check_webside_manufacturer(llm, content, webside, manufacturer):
     """
     使用LLM检查网站和厂商信息
     """
+    print("================开始检查厂商和网站信息准确性===================\n")
     template = """
     你是一个优秀的厂商信息分析师，你需要根据以下内容判断官方网站和厂商信息是否正确。
     
@@ -109,6 +112,7 @@ def check_webside_manufacturer(llm, content, webside, manufacturer):
     """
     
     web_html = crawl_website(webside)
+    print(f"爬取网站 {webside} 的HTML内容完毕\n")
 
     prompt = PromptTemplate(
         input_variables=["content", "webside", "web_html", "manufacturer"],
@@ -127,6 +131,7 @@ def check_classification(llm, content, classification1, classification2):
     """
     基于参考信息，判断分类是否准确
     """
+    print("\n\n================开始检查分类信息准确性===============")
     # 可选的分类结果
     classification = {}
     f = open('classification.json', 'r', encoding='utf-8')
@@ -173,6 +178,7 @@ def summarize_content(llm, content):
     """
     根据大模型分析的信息，格式化输出为json格式
     """
+    print("================开始格式化输出为JSON格式=================")
     template = """
     你是一个优秀的FOFA规则信息审核师，我会提供给你某条规则的厂商、官网地址、分类信息的审核过程，你需要按照给定json格式进行输出。
 
@@ -264,92 +270,6 @@ def summarize_content(llm, content):
             "classification_check": {"result": False, "reason": "处理失败"}
         }
 
-# def simplify_content(content, llm=None):
-#     """
-#     AI检索html内容，提取关键信息
-#     将长内容分段处理，保留与厂商、官网地址、分类信息相关的内容
-#     """
-#     if llm is None:
-#         llm = ChatOpenAI(
-#             model="qwen",
-#             openai_api_base="http://211.91.254.226:2440/v1",
-#             verbose=True,
-#         )
-#     if not content:
-#         return ""
-    
-#     # 分段处理，每段最大30000字符
-#     chunks = []
-#     max_chunk_size = 30000
-    
-#     if len(content) <= max_chunk_size:
-#         chunks = [content]
-#     else:
-#         # 分段处理长文本
-#         for i in range(0, len(content), max_chunk_size):
-#             chunks.append(content[i:i+max_chunk_size])
-    
-#     template = """
-#     你是一个专业的内容提取专家。请从以下内容中提取与厂商信息、官网地址、产品分类相关的关键信息。
-    
-#     内容: {chunk}
-    
-#     请只提取与以下内容相关的信息：
-#     1. 厂商名称、公司信息
-#     2. 官方网站信息、域名、链接
-#     3. 产品或服务分类信息
-#     4. 产品名称、型号、功能描述
-    
-#     仅保留原文中的相关信息，删去无关内容，不要添加自己的解释或推断。
-#     如果内容中没有相关信息，请返回"无相关信息"。
-#     """
-    
-#     prompt = PromptTemplate(
-#         input_variables=["chunk"],
-#         template=template
-#     )
-    
-#     extracted_contents = []
-    
-#     try:
-#         for chunk in chunks:
-#             chain = LLMChain(llm=llm, prompt=prompt)
-#             result = chain.run(chunk=chunk)
-#             if result and result != "无相关信息":
-#                 extracted_contents.append(result)
-        
-#         # 合并所有提取的内容
-#         final_content = "\n\n".join(extracted_contents)
-        
-#         # 如果提取内容过长，进行二次精简
-#         while len(final_content) > max_chunk_size:
-#             final_template = """
-#             你是一个专业的内容精简专家。请对以下已提取的内容进行进一步精简，确保保留所有与厂商信息、官网地址、产品分类相关的关键信息。
-            
-#             内容: {content}
-            
-#             请确保精简后的内容保留所有关键信息，删去重复内容，不要添加自己的解释或推断。
-#             """
-            
-#             final_prompt = PromptTemplate(
-#                 input_variables=["content"],
-#                 template=final_template
-#             )
-            
-#             final_chain = LLMChain(llm=llm, prompt=final_prompt)
-#             final_content = final_chain.run(content=final_content)
-        
-#         # 返回内容加上原文本的首尾部分
-#         final_content = content[:15000] + "\n\n" + final_content + "\n\n" + content[-15000:]
-
-#         return final_content
-#     except Exception as e:
-#         error_msg = f"提取内容失败: {str(e)}"
-#         print(error_msg)
-#         return error_msg
-
-
-
 def check(query, webside, manufacturer, classification1, classification2):
     load_environment()
     
@@ -357,25 +277,29 @@ def check(query, webside, manufacturer, classification1, classification2):
     llm = ChatOpenAI(
         model="qwen",
         openai_api_base="http://211.91.254.226:2440/v1",
-        verbose=True,
+        verbose=False,
     )
 
     content = get_banner_or_body(query)
-    print("查询结果:", content)
+    print("banner和body内容查询完毕\n")
+
     res = check_webside_manufacturer(
         llm, 
         content=content, 
         webside=webside, 
         manufacturer=manufacturer
     )
-    print("厂商信息检查结果:", res)
+    print("="*60)
+    print("厂商网站信息检查结果如下:\n", res) 
+
     res2 = check_classification(
         llm, 
         content=content, 
         classification1=classification1, 
         classification2=classification2
     )
-    print("分类信息检查结果:", res2)
+    print("="*60)
+    print("\n分类信息检查结果如下:\n", res2)
     
     # 将结果合并并格式化为JSON
     content = res + "\n" + res2
@@ -390,4 +314,4 @@ if __name__ == "__main__":
     classification1 = '网络交换设备'
     classification2 = '路由器'
     res = check(query, webside, manufacturer, classification1, classification2)
-    print("最终结果:", res)
+    print("检测结果如下:\n", res)

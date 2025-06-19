@@ -9,3 +9,4 @@ google-search-results
 langchain_community
 langchain.tools
 bs4
+openpyxl
